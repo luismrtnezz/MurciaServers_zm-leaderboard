@@ -67,21 +67,178 @@ const tbody=document.getElementById('tbody');
 const logBox=document.getElementById('log');
 const countPill=document.getElementById('countPill');
 const kpis=document.getElementById('kpis');
-function parseLine(line){line=line.trim();if(!line.startsWith('ZM_EXPORT;')) return null;const parts=line.split(';');const item={clientid:parts[1]||'',player:parts[2]||''};for(let i=3;i<parts.length;i++){const idx=parts[i].indexOf('=');if(idx>0)item[parts[i].slice(0,idx)]=parts[i].slice(idx+1);}item.round=Number(item.round||0);item.score=Number(item.score||0);item.downs=Number(item.downs||0);item.time_survived_seconds=Number(item.time_survived_seconds||0);item.time_survived_text=item.time_survived_text||'0:00';return item;}
-function loadLines(text){const lines=text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);const added=[];for(const line of lines){const run=parseLine(line);if(run){state.runs.unshift(run);added.push(run);}}if(added.length){logBox.textContent=`Importadas ${added.length} líneas.\n\n${formatRun(added[0])}`;render();}else{logBox.textContent='No se encontraron líneas ZM_EXPORT válidas.';}}
-function formatRun(r){return Object.entries(r).map(([k,v])=>`${k}=${v}`).join(';');}
-function sortRuns(){const arr=[...state.runs];if(state.sort==='score')arr.sort((a,b)=>b.score-a.score||b.round-a.round||a.downs-b.downs);else if(state.sort==='time')arr.sort((a,b)=>b.time_survived_seconds-a.time_survived_seconds||b.round-a.round||b.score-a.score);else arr.sort((a,b)=>b.round-a.round||b.score-a.score||a.downs-b.downs);return arr;}
-function render(){const runs=sortRuns();countPill.textContent=`${state.runs.length} runs`;const total=state.runs.length;const bestRound=total?Math.max(...state.runs.map(r=>r.round||0)):0;const bestScore=total?Math.max(...state.runs.map(r=>r.score||0)):0;const avgTime=total?Math.round(state.runs.reduce((a,r)=>a+(r.time_survived_seconds||0),0)/total):0;const uniquePlayers=new Set(state.runs.map(r=>r.player||'unknown')).size;kpis.innerHTML=`<div class="kpi"><div class="label">Runs</div><div class="value">${total}</div></div><div class="kpi"><div class="label">Mejor ronda</div><div class="value">${bestRound}</div></div><div class="kpi"><div class="label">Mejor score</div><div class="value">${bestScore}</div></div><div class="kpi"><div class="label">Tiempo medio</div><div class="value">${avgTime?sformat(avgTime):'0:00'}</div></div>`;tbody.innerHTML=runs.map((r,i)=>`<tr><td data-label="#">${i+1}</td><td data-label="Jugador">${r.player||'unknown'}</td><td data-label="Mapa">${r.map||'-'}</td><td data-label="Ronda">${r.round||'-'}</td><td data-label="Score">${r.score||'-'}</td><td data-label="Estado"><span class="pill">${r.final_state||'-'}</span></td><td data-label="Tiempo">${r.time_survived_text||'-'}</td></tr>`).join('')||`<tr><td colspan="7" class="muted">Aún no hay runs importadas.</td></tr>`;}
-function sformat(sec){sec=Math.max(0,Math.floor(sec));const m=Math.floor(sec/60);const s=sec%60;return `${m}:${String(s).padStart(2,'0')}`;}
-document.getElementById('loadBtn').onclick=async()=>{const f=fileInput.files&&fileInput.files[0];if(!f){logBox.textContent='Selecciona un archivo primero.';return;}const text=await f.text();loadLines(text);};
-document.getElementById('importBtn').onclick=()=>{if(!raw.value.trim()){logBox.textContent='Pega líneas ZM_EXPORT primero.';return;}loadLines(raw.value);raw.value='';};
-document.getElementById('clearBtn').onclick=()=>{state.runs=[];render();logBox.textContent='Sin datos todavía.';};
+
+function parseLine(line){
+  line=line.trim();
+  if(!line.startsWith('ZM_EXPORT;')) return null;
+  const parts=line.split(';');
+  const item={clientid:parts[1]||'',player:parts[2]||''};
+  for(let i=3;i<parts.length;i++){
+    const idx=parts[i].indexOf('=');
+    if(idx>0) item[parts[i].slice(0,idx)]=parts[i].slice(idx+1);
+  }
+  item.round=Number(item.round||0);
+  item.score=Number(item.score||0);
+  item.downs=Number(item.downs||0);
+  item.time_survived_seconds=Number(item.time_survived_seconds||0);
+  item.time_survived_text=item.time_survived_text||'0:00';
+  return item;
+}
+
+function dedupeRuns(runs){
+  const seen=new Set();
+  const clean=[];
+  for(const run of runs){
+    const key=[
+      run.player||'',
+      run.map||'',
+      run.round||0,
+      run.score||0,
+      run.time_survived_seconds||0,
+      run.final_state||'',
+      run.end_reason||''
+    ].join('|');
+    if(!seen.has(key)){
+      seen.add(key);
+      clean.push(run);
+    }
+  }
+  return clean;
+}
+
+function loadLines(text, mode='append'){
+  const lines=text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  const added=[];
+  for(const line of lines){
+    const run=parseLine(line);
+    if(run) added.push(run);
+  }
+
+  if(!added.length){
+    logBox.textContent='No se encontraron líneas ZM_EXPORT válidas.';
+    return;
+  }
+
+  if(mode==='replace'){
+    state.runs=dedupeRuns(added);
+  }else{
+    state.runs=dedupeRuns([...added, ...state.runs]);
+  }
+
+  logBox.textContent=`Importadas ${added.length} líneas.\n\n${formatRun(added[0])}`;
+  render();
+}
+
+function formatRun(r){
+  return Object.entries(r).map(([k,v])=>`${k}=${v}`).join(';');
+}
+
+function sortRuns(){
+  const arr=[...state.runs];
+  if(state.sort==='score'){
+    arr.sort((a,b)=>b.score-a.score||b.round-a.round||a.downs-b.downs);
+  }else if(state.sort==='time'){
+    arr.sort((a,b)=>b.time_survived_seconds-a.time_survived_seconds||b.round-a.round||b.score-a.score);
+  }else{
+    arr.sort((a,b)=>b.round-a.round||b.score-a.score||a.downs-b.downs);
+  }
+  return arr;
+}
+
+function render(){
+  const runs=sortRuns();
+  countPill.textContent=`${state.runs.length} runs`;
+
+  const total=state.runs.length;
+  const bestRound=total?Math.max(...state.runs.map(r=>r.round||0)):0;
+  const bestScore=total?Math.max(...state.runs.map(r=>r.score||0)):0;
+  const avgTime=total?Math.round(state.runs.reduce((a,r)=>a+(r.time_survived_seconds||0),0)/total):0;
+
+  kpis.innerHTML=`
+    <div class="kpi"><div class="label">Runs</div><div class="value">${total}</div></div>
+    <div class="kpi"><div class="label">Mejor ronda</div><div class="value">${bestRound}</div></div>
+    <div class="kpi"><div class="label">Mejor score</div><div class="value">${bestScore}</div></div>
+    <div class="kpi"><div class="label">Tiempo medio</div><div class="value">${avgTime?sformat(avgTime):'0:00'}</div></div>
+  `;
+
+  tbody.innerHTML=runs.map((r,i)=>`
+    <tr>
+      <td data-label="#">${i+1}</td>
+      <td data-label="Jugador">${r.player||'unknown'}</td>
+      <td data-label="Mapa">${r.map||'-'}</td>
+      <td data-label="Ronda">${r.round||'-'}</td>
+      <td data-label="Score">${r.score||'-'}</td>
+      <td data-label="Estado"><span class="pill">${r.final_state||'-'}</span></td>
+      <td data-label="Tiempo">${r.time_survived_text||'-'}</td>
+    </tr>
+  `).join('') || `<tr><td colspan="7" class="muted">Aún no hay runs importadas.</td></tr>`;
+}
+
+function sformat(sec){
+  sec=Math.max(0,Math.floor(sec));
+  const m=Math.floor(sec/60);
+  const s=sec%60;
+  return `${m}:${String(s).padStart(2,'0')}`;
+}
+
+async function loadRemoteRuns(){
+  try{
+    const res=await fetch('./runs.txt?ts='+Date.now(), {cache:'no-store'});
+    if(!res.ok) throw new Error('runs.txt no encontrado');
+    const text=await res.text();
+    if(text.trim()){
+      loadLines(text,'replace');
+      logBox.textContent=`Cargado runs.txt desde GitHub Pages.\n\n${state.runs.length} runs en memoria.`;
+    }else{
+      logBox.textContent='runs.txt está vacío.';
+    }
+  }catch(err){
+    logBox.textContent='No se pudo cargar runs.txt automáticamente. Puedes usar el selector manual.';
+  }
+}
+
+document.getElementById('loadBtn').onclick=async()=>{
+  const f=fileInput.files&&fileInput.files[0];
+  if(!f){
+    logBox.textContent='Selecciona un archivo primero.';
+    return;
+  }
+  const text=await f.text();
+  loadLines(text,'replace');
+};
+
+document.getElementById('importBtn').onclick=()=>{
+  if(!raw.value.trim()){
+    logBox.textContent='Pega líneas ZM_EXPORT primero.';
+    return;
+  }
+  loadLines(raw.value,'append');
+  raw.value='';
+};
+
+document.getElementById('clearBtn').onclick=()=>{
+  state.runs=[];
+  render();
+  logBox.textContent='Sin datos todavía.';
+};
+
 document.getElementById('sortRound').onclick=()=>{state.sort='round';render();};
 document.getElementById('sortScore').onclick=()=>{state.sort='score';render();};
 document.getElementById('sortTime').onclick=()=>{state.sort='time';render();};
-document.getElementById('themeBtn').onclick=()=>{document.documentElement.toggleAttribute('data-theme');document.documentElement.setAttribute('data-theme',document.documentElement.hasAttribute('data-theme')?'dark':'');if(!document.documentElement.getAttribute('data-theme'))document.documentElement.removeAttribute('data-theme');};
-document.getElementById('demoBtn').onclick=()=>{state.runs=[];loadLines(`ZM_EXPORT;0;MurciaPlayer;name=MurciaPlayer;map=zm_zod;round=27;score=14850;downs=2;revives_given=4;revives_received=1;pap=3;repack=1;perks_bought_cmd=4;perks_bought_machine=2;perks_bought_machine_list=jugg,speed;perks_final_count=5;perks_final=jugg,speed,stam,quick_revive,deadshot;final_state=dead;end_reason=death;final_weapon=ar_kp;time_survived_seconds=1842;time_survived_text=30:42\nZM_EXPORT;1;OtherPlayer;name=OtherPlayer;map=zm_castle;round=19;score=10250;downs=1;revives_given=2;revives_received=0;pap=2;repack=0;perks_bought_cmd=3;perks_bought_machine=1;perks_bought_machine_list=jugg,speed;perks_final_count=4;perks_final=jugg,speed,stam,quick_revive;final_state=alive;end_reason=game_end;final_weapon=kn44;time_survived_seconds=1210;time_survived_text=20:10`);};
+
+document.getElementById('themeBtn').onclick=()=>{
+  const current=document.documentElement.getAttribute('data-theme');
+  document.documentElement.setAttribute('data-theme', current==='dark' ? 'light' : 'dark');
+};
+
+document.getElementById('demoBtn').onclick=()=>{
+  state.runs=[];
+  loadLines(`ZM_EXPORT;0;MurciaPlayer;name=MurciaPlayer;map=zm_zod;round=27;score=14850;downs=2;revives_given=4;revives_received=1;pap=3;repack=1;perks_bought_cmd=4;perks_bought_machine=2;perks_bought_machine_list=jugg,speed;perks_final_count=5;perks_final=jugg,speed,stam,quick_revive,deadshot;final_state=dead;end_reason=death;final_weapon=ar_kp;time_survived_seconds=1842;time_survived_text=30:42
+ZM_EXPORT;1;OtherPlayer;name=OtherPlayer;map=zm_castle;round=19;score=10250;downs=1;revives_given=2;revives_received=0;pap=2;repack=0;perks_bought_cmd=3;perks_bought_machine=1;perks_bought_machine_list=jugg,speed;perks_final_count=4;perks_final=jugg,speed,stam,quick_revive;final_state=alive;end_reason=game_end;final_weapon=kn44;time_survived_seconds=1210;time_survived_text=20:10`,'replace');
+};
+
 render();
+loadRemoteRuns();
 </script>
 </body>
 </html>'''
