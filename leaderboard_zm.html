@@ -1,0 +1,89 @@
+from pathlib import Path
+html = '''<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Murcia ZM Leaderboard</title>
+<style>
+:root{--bg:#f6f4ef;--card:#ffffff;--card2:#f0ece6;--text:#26231d;--muted:#726f68;--line:#ddd8cf;--pri:#0e6b73;--pri2:#0b5056;--shadow:0 10px 28px rgba(34,30,22,.08);--r:18px}
+[data-theme=dark]{--bg:#171614;--card:#1d1b19;--card2:#23211f;--text:#d7d5d1;--muted:#8a8782;--line:#393733;--pri:#4f9ca4;--pri2:#2e7f88;--shadow:0 10px 28px rgba(0,0,0,.35)}
+*{box-sizing:border-box}body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}.wrap{max-width:1200px;margin:0 auto;padding:24px}.hero,.panel,.kpi{background:var(--card);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}.hero{padding:28px;background:linear-gradient(180deg,var(--card),var(--card2));display:grid;gap:14px}.badge{display:inline-flex;width:max-content;padding:5px 10px;border-radius:999px;background:rgba(14,107,115,.12);color:var(--pri);font-size:.8rem;font-weight:700}.title{margin:0;font-size:clamp(2rem,5vw,4.2rem);line-height:1.02;letter-spacing:-.04em}.sub{margin:0;max-width:74ch;color:var(--muted);line-height:1.6}.toolbar{display:flex;flex-wrap:wrap;gap:10px}.toolbar input,.toolbar button{font:inherit;border-radius:14px;border:1px solid var(--line);background:var(--card);color:var(--text);padding:12px 14px}.toolbar input{flex:1 1 360px;min-width:260px}.toolbar button{cursor:pointer;background:var(--pri);border-color:var(--pri);color:#fff}.toolbar button.secondary{background:var(--card2);color:var(--text)}.hint{color:var(--muted);font-size:.9rem}.grid{display:grid;gap:16px;margin-top:18px}.kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}.kpi{padding:16px}.kpi .label{color:var(--muted);font-size:.8rem;text-transform:uppercase;letter-spacing:.08em}.kpi .value{margin-top:8px;font-size:1.5rem;font-weight:700}.split{display:grid;grid-template-columns:1.25fr .75fr;gap:16px}.panel{overflow:hidden}.panel header{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:16px 18px;border-bottom:1px solid var(--line)}.panel h2{margin:0;font-size:1.05rem}.row-actions{display:flex;gap:8px;flex-wrap:wrap}.pill{display:inline-flex;align-items:center;padding:4px 9px;border-radius:999px;background:rgba(14,107,115,.12);color:var(--pri);font-size:.8rem;font-weight:700}.table{width:100%;border-collapse:collapse}.table th,.table td{padding:14px 18px;border-bottom:1px solid var(--line);text-align:left}.table th{font-size:.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:.08em}.log{font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,monospace;font-size:.84rem;white-space:pre-wrap;word-break:break-word;background:var(--card2);padding:14px;border-radius:14px;border:1px solid var(--line);max-height:280px;overflow:auto}.muted{color:var(--muted)}@media(max-width:900px){.split{grid-template-columns:1fr}.kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}@media(max-width:720px){.table thead{display:none}.table tr{display:grid;grid-template-columns:1fr 1fr}.table td{display:block;border-bottom:0}.table td[data-label]::before{content:attr(data-label)": ";display:block;color:var(--muted);font-size:.75rem;text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px}.table tr{border-bottom:1px solid var(--line)}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="hero">
+    <div class="badge">Murcia Servers</div>
+    <h1 class="title">Zombie Run Leaderboard</h1>
+    <p class="sub">Carga un archivo .txt o pega líneas ZM_EXPORT; el panel las convierte en runs, calcula métricas y ordena el ranking al instante.</p>
+    <div class="toolbar">
+      <input id="fileInput" type="file" accept=".txt,.log,.csv,.json,.export" />
+      <button id="loadBtn">Cargar archivo</button>
+      <button id="demoBtn" class="secondary">Demo</button>
+      <button id="clearBtn" class="secondary">Limpiar</button>
+      <button id="themeBtn" class="secondary">Tema</button>
+    </div>
+    <div class="toolbar">
+      <input id="raw" placeholder="Opcional: pega aquí una o varias líneas ZM_EXPORT" />
+      <button id="importBtn">Importar pegado</button>
+    </div>
+    <div class="hint">Formato esperado: ZM_EXPORT;clientid;player;key=value;key=value;...</div>
+  </section>
+
+  <div class="grid">
+    <section class="kpis" id="kpis"></section>
+
+    <div class="split">
+      <section class="panel">
+        <header>
+          <h2>Top runs</h2>
+          <div class="row-actions">
+            <button id="sortRound" class="secondary">Ronda</button>
+            <button id="sortScore" class="secondary">Score</button>
+            <button id="sortTime" class="secondary">Tiempo</button>
+          </div>
+        </header>
+        <table class="table">
+          <thead><tr><th>#</th><th>Jugador</th><th>Mapa</th><th>Ronda</th><th>Score</th><th>Estado</th><th>Tiempo</th></tr></thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </section>
+
+      <section class="panel">
+        <header><h2>Último import</h2><span class="pill" id="countPill">0 runs</span></header>
+        <div style="padding:18px">
+          <div class="log" id="log">Sin datos todavía.</div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+<script>
+const state={runs:[],sort:'round'};
+const fileInput=document.getElementById('fileInput');
+const raw=document.getElementById('raw');
+const tbody=document.getElementById('tbody');
+const logBox=document.getElementById('log');
+const countPill=document.getElementById('countPill');
+const kpis=document.getElementById('kpis');
+function parseLine(line){line=line.trim();if(!line.startsWith('ZM_EXPORT;')) return null;const parts=line.split(';');const item={clientid:parts[1]||'',player:parts[2]||''};for(let i=3;i<parts.length;i++){const idx=parts[i].indexOf('=');if(idx>0)item[parts[i].slice(0,idx)]=parts[i].slice(idx+1);}item.round=Number(item.round||0);item.score=Number(item.score||0);item.downs=Number(item.downs||0);item.time_survived_seconds=Number(item.time_survived_seconds||0);item.time_survived_text=item.time_survived_text||'0:00';return item;}
+function loadLines(text){const lines=text.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);const added=[];for(const line of lines){const run=parseLine(line);if(run){state.runs.unshift(run);added.push(run);}}if(added.length){logBox.textContent=`Importadas ${added.length} líneas.\n\n${formatRun(added[0])}`;render();}else{logBox.textContent='No se encontraron líneas ZM_EXPORT válidas.';}}
+function formatRun(r){return Object.entries(r).map(([k,v])=>`${k}=${v}`).join(';');}
+function sortRuns(){const arr=[...state.runs];if(state.sort==='score')arr.sort((a,b)=>b.score-a.score||b.round-a.round||a.downs-b.downs);else if(state.sort==='time')arr.sort((a,b)=>b.time_survived_seconds-a.time_survived_seconds||b.round-a.round||b.score-a.score);else arr.sort((a,b)=>b.round-a.round||b.score-a.score||a.downs-b.downs);return arr;}
+function render(){const runs=sortRuns();countPill.textContent=`${state.runs.length} runs`;const total=state.runs.length;const bestRound=total?Math.max(...state.runs.map(r=>r.round||0)):0;const bestScore=total?Math.max(...state.runs.map(r=>r.score||0)):0;const avgTime=total?Math.round(state.runs.reduce((a,r)=>a+(r.time_survived_seconds||0),0)/total):0;const uniquePlayers=new Set(state.runs.map(r=>r.player||'unknown')).size;kpis.innerHTML=`<div class="kpi"><div class="label">Runs</div><div class="value">${total}</div></div><div class="kpi"><div class="label">Mejor ronda</div><div class="value">${bestRound}</div></div><div class="kpi"><div class="label">Mejor score</div><div class="value">${bestScore}</div></div><div class="kpi"><div class="label">Tiempo medio</div><div class="value">${avgTime?sformat(avgTime):'0:00'}</div></div>`;tbody.innerHTML=runs.map((r,i)=>`<tr><td data-label="#">${i+1}</td><td data-label="Jugador">${r.player||'unknown'}</td><td data-label="Mapa">${r.map||'-'}</td><td data-label="Ronda">${r.round||'-'}</td><td data-label="Score">${r.score||'-'}</td><td data-label="Estado"><span class="pill">${r.final_state||'-'}</span></td><td data-label="Tiempo">${r.time_survived_text||'-'}</td></tr>`).join('')||`<tr><td colspan="7" class="muted">Aún no hay runs importadas.</td></tr>`;}
+function sformat(sec){sec=Math.max(0,Math.floor(sec));const m=Math.floor(sec/60);const s=sec%60;return `${m}:${String(s).padStart(2,'0')}`;}
+document.getElementById('loadBtn').onclick=async()=>{const f=fileInput.files&&fileInput.files[0];if(!f){logBox.textContent='Selecciona un archivo primero.';return;}const text=await f.text();loadLines(text);};
+document.getElementById('importBtn').onclick=()=>{if(!raw.value.trim()){logBox.textContent='Pega líneas ZM_EXPORT primero.';return;}loadLines(raw.value);raw.value='';};
+document.getElementById('clearBtn').onclick=()=>{state.runs=[];render();logBox.textContent='Sin datos todavía.';};
+document.getElementById('sortRound').onclick=()=>{state.sort='round';render();};
+document.getElementById('sortScore').onclick=()=>{state.sort='score';render();};
+document.getElementById('sortTime').onclick=()=>{state.sort='time';render();};
+document.getElementById('themeBtn').onclick=()=>{document.documentElement.toggleAttribute('data-theme');document.documentElement.setAttribute('data-theme',document.documentElement.hasAttribute('data-theme')?'dark':'');if(!document.documentElement.getAttribute('data-theme'))document.documentElement.removeAttribute('data-theme');};
+document.getElementById('demoBtn').onclick=()=>{state.runs=[];loadLines(`ZM_EXPORT;0;MurciaPlayer;name=MurciaPlayer;map=zm_zod;round=27;score=14850;downs=2;revives_given=4;revives_received=1;pap=3;repack=1;perks_bought_cmd=4;perks_bought_machine=2;perks_bought_machine_list=jugg,speed;perks_final_count=5;perks_final=jugg,speed,stam,quick_revive,deadshot;final_state=dead;end_reason=death;final_weapon=ar_kp;time_survived_seconds=1842;time_survived_text=30:42\nZM_EXPORT;1;OtherPlayer;name=OtherPlayer;map=zm_castle;round=19;score=10250;downs=1;revives_given=2;revives_received=0;pap=2;repack=0;perks_bought_cmd=3;perks_bought_machine=1;perks_bought_machine_list=jugg,speed;perks_final_count=4;perks_final=jugg,speed,stam,quick_revive;final_state=alive;end_reason=game_end;final_weapon=kn44;time_survived_seconds=1210;time_survived_text=20:10`);};
+render();
+</script>
+</body>
+</html>'''
+Path('output/leaderboard.html').write_text(html, encoding='utf-8')
+print('updated')
