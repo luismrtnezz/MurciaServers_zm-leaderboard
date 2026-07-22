@@ -70,24 +70,40 @@
     </main>
 
     <script>
-        async function cargarDatos() {
-            try {
-                const respuesta = await fetch('http://localhost:3000/api/leaderboard');
-                const datos = await respuesta.json();
-                
-                // 1. RENDERIZADO DE TABLA DE JUGADORES
-                const tabla = document.getElementById('tabla-jugadores');
-                tabla.innerHTML = '';
-                
-                if(datos.jugadores.length === 0) {
-                    tabla.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-zinc-500">Ningún sobreviviente registrado aún.</td></tr>`;
-                }
+    // ==========================================
+    // CONFIGURACIÓN PÚBLICA Y SEGURA PARA LA WEB
+    // ==========================================
+    const SUPABASE_URL = 'https://pkqragpkadfmwnxqjolb.supabase.co';
+    
+    // USA AQUÍ TU PUBLISHABLE KEY (Empieza por sb_publishable_)
+    const SUPABASE_PUBLISHABLE_KEY = 'sb_publishable_aam0Uk54Kb3PYanjzaqC_Q_u8zA9J...'; 
 
-                datos.jugadores.forEach((jugador, index) => {
-                    // Cálculo de porcentaje de headshots para medir precisión
+    const headers = {
+        'apikey': SUPABASE_PUBLISHABLE_KEY,
+        'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
+        'Content-Type': 'application/json'
+    };
+
+    async function cargarDatos() {
+        try {
+            // 1. Obtener Tabla de Jugadores
+            const resJugadores = await fetch(`${SUPABASE_URL}/rest/v1/jugadores?select=*&order=bajas_totales.desc`, { headers });
+            const jugadores = await resJugadores.json();
+
+            // 2. Obtener Historial de Partidas
+            const resPartidas = await fetch(`${SUPABASE_URL}/rest/v1/partidas?select=*&order=id.desc&limit=5`, { headers });
+            const partidas = await resPartidas.json();
+            
+            // Renderizado de Jugadores
+            const tabla = document.getElementById('tabla-jugadores');
+            tabla.innerHTML = '';
+            
+            if(!jugadores || jugadores.length === 0) {
+                tabla.innerHTML = `<tr><td colspan="6" class="text-center py-8 text-zinc-500">Ningún sobreviviente registrado aún.</td></tr>`;
+            } else {
+                jugadores.forEach((jugador, index) => {
                     const totalBajas = jugador.bajas_totales || 1;
                     const pctHeadshots = ((jugador.headshots / totalBajas) * 100).toFixed(1);
-                    
                     let corona = index === 0 ? '👑' : index + 1;
                     let claseFila = index === 0 ? 'bg-purple-950/20 text-purple-200' : 'hover:bg-zinc-900/40 text-zinc-300';
 
@@ -107,39 +123,41 @@
                         </tr>
                     `;
                 });
+            }
 
-                # 2. RENDERIZADO DE HISTORIAL DE PARTIDAS
-                const contenedorPartidas = document.getElementById('lista-partidas');
-                contenedorPartidas.innerHTML = '';
+            // Renderizado de Partidas
+            const contenedorPartidas = document.getElementById('lista-partidas');
+            contenedorPartidas.innerHTML = '';
 
-                if(datos.partidas.length === 0) {
-                    contenedorPartidas.innerHTML = `<div class="text-center py-6 text-zinc-600 bg-zinc-950 border border-zinc-900 rounded-xl">No hay registros históricos.</div>`;
-                }
+            if(!partidas || partidas.length === 0) {
+                contenedorPartidas.innerHTML = `<div class="text-center py-6 text-zinc-600 bg-zinc-950 border border-zinc-900 rounded-xl">No hay registros históricos.</div>`;
+            } else {
+                partidas.forEach(partida => {
+                    let fechaFormateada = partida.created_at ? new Date(partida.created_at).toLocaleString() : "Reciente";
 
-                datos.partidas.forEach(partida => {
                     contenedorPartidas.innerHTML += `
-                        <div class="bg-zinc-950 border border-zinc-850 p-4 rounded-xl flex justify-between items-center hover:border-zinc-700 transition-all shadow-md">
+                        <div class="bg-zinc-950 border border-zinc-800 p-4 rounded-xl flex justify-between items-center hover:border-zinc-700 transition-all shadow-md">
                             <div class="space-y-1">
                                 <div class="text-xs font-bold text-purple-400 tracking-wider font-mono uppercase">LOBBY MATCH #${partida.id}</div>
                                 <div class="font-bold text-white text-lg tracking-wide">${partida.mapa}</div>
-                                <div class="text-xs text-zinc-500 font-medium">${new Date(partida.fecha).toLocaleString()}</div>
+                                <div class="text-xs text-zinc-500 font-medium">${fechaFormateada}</div>
                             </div>
                             <div class="text-right">
                                 <div class="text-xs font-semibold text-zinc-400 uppercase">Ronda Max</div>
-                                <div class="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-br from-amber-400 to-orange-500 titulo-gamer">R-${partida.ronda_alcanzada}</div>
+                                <div class="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-br from-amber-400 to-orange-500 titulo-gamer">R-${partida.ronda_alcanzada || 1}</div>
                             </div>
                         </div>
                     `;
                 });
-
-            } catch (error) {
-                console.error("Fallo al conectar con el servidor local de estadísticas:", error);
             }
-        }
 
-        // Bucle para actualizar la página en tiempo real automáticamente cada 4 segundos
-        cargarDatos();
-        setInterval(cargarDatos, 4000);
-    </script>
+        } catch (error) {
+            console.error("Error al cargar desde Supabase:", error);
+        }
+    }
+
+    cargarDatos();
+    setInterval(cargarDatos, 5000);
+</script>
 </body>
 </html>
